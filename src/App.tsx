@@ -2332,7 +2332,7 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
                   </div>
                   <div className="flex items-center gap-3 px-4 py-3.5">
                     <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 shadow-sm border border-black/[0.08] dark:border-white/[0.08] bg-white">
-                      <img src="/icon-192.png" alt="QuầyPOS" className="w-full h-full object-contain" />
+                      <img src="./icon-192.png" alt="QuầyPOS" className="w-full h-full object-contain" />
                     </div>
                     <div className="flex-1 min-w-0">
                       <p className="text-[14px] font-medium">Cài QuầyPOS lên thiết bị</p>
@@ -4731,7 +4731,7 @@ export default function App() {
           <div className="fixed bottom-4 left-4 right-4 z-[200] animate-fade-in">
             <div className="bg-white dark:bg-[#1C1C1E] rounded-2xl shadow-xl ring-1 ring-black/[0.08] dark:ring-white/[0.08] flex items-center gap-3 px-4 py-3">
               <div className="w-10 h-10 rounded-xl overflow-hidden shrink-0 shadow-sm border border-black/[0.08] dark:border-white/[0.08] bg-white">
-                <img src="/icon-192.png" alt="QuầyPOS" className="w-full h-full object-contain" />
+                <img src="./icon-192.png" alt="QuầyPOS" className="w-full h-full object-contain" />
               </div>
               <div className="flex-1 min-w-0">
                 <p className="text-[14px] font-semibold">Cài QuầyPOS</p>
@@ -4760,7 +4760,7 @@ export default function App() {
           {/* Logo */}
           <div className="flex items-center gap-2.5 shrink-0">
             <div className="w-8 h-8 rounded-xl overflow-hidden shadow-sm flex items-center justify-center bg-white border border-black/[0.08] dark:border-white/[0.08]">
-              <img src="/icon-192.png" alt="QuầyPOS" className="w-full h-full object-contain" />
+              <img src="./icon-192.png" alt="QuầyPOS" className="w-full h-full object-contain" />
             </div>
             <div className="hidden sm:block">
               <p className="text-[15px] font-semibold leading-none tracking-tight">QuầyPOS</p>

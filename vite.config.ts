@@ -16,7 +16,7 @@ export default defineConfig(({ mode }) => {
   const emitSourcemaps = mode === 'development'
 
   return {
-    base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : (process.env.BASE_URL || './'),
+    base: process.env.FIGMA_PUBLIC_URL ? `${process.env.FIGMA_PUBLIC_URL}/` : (process.env.BASE_URL || '/POS/'),
     define: {
       __APP_VERSION__: JSON.stringify(pkg.version),
       __BUILD_TIME__: JSON.stringify(new Date().toISOString()),
