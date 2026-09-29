@@ -4142,7 +4142,15 @@ function AuthScreen({ dark, onLogin }: AuthScreenProps) {
         </div>
 
         {/* Card */}
-        <div className="w-full max-w-sm bg-white dark:bg-[#1C1C1E] rounded-3xl shadow-xl shadow-black/[0.06] dark:shadow-black/30 p-6 space-y-4">
+        <form
+          onSubmit={(e) => {
+            e.preventDefault()
+            if (view === 'login') handleLogin()
+            else if (view === 'register') handleRegister()
+            else handleForgot()
+          }}
+          className="w-full max-w-sm bg-white dark:bg-[#1C1C1E] rounded-3xl shadow-xl shadow-black/[0.06] dark:shadow-black/30 p-6 space-y-4"
+        >
 
           {/* Register: name field */}
           {view === 'register' && (
@@ -4151,7 +4159,6 @@ function AuthScreen({ dark, onLogin }: AuthScreenProps) {
               <input
                 type="text" placeholder="Nguyễn Văn A"
                 value={name} onChange={e => setName(e.target.value)}
-                onKeyDown={e => e.key === 'Enter' && handleRegister()}
                 className={inputBase}
               />
             </div>
@@ -4163,7 +4170,6 @@ function AuthScreen({ dark, onLogin }: AuthScreenProps) {
             <input
               type="email" placeholder="you@example.com"
               value={email} onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === 'Enter' && (view === 'login' ? handleLogin() : view === 'register' ? handleRegister() : handleForgot())}
               className={inputBase}
             />
           </div>
@@ -4176,7 +4182,6 @@ function AuthScreen({ dark, onLogin }: AuthScreenProps) {
                 <input
                   type={showPass ? 'text' : 'password'} placeholder="••••••••"
                   value={password} onChange={e => setPassword(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && (view === 'login' ? handleLogin() : handleRegister())}
                   className={inputBase + ' pr-12'}
                 />
                 <button type="button" onClick={() => setShowPass(p => !p)}
@@ -4195,7 +4200,6 @@ function AuthScreen({ dark, onLogin }: AuthScreenProps) {
                 <input
                   type={showConf ? 'text' : 'password'} placeholder="••••••••"
                   value={confirm} onChange={e => setConfirm(e.target.value)}
-                  onKeyDown={e => e.key === 'Enter' && handleRegister()}
                   className={inputBase + ' pr-12'}
                 />
                 <button type="button" onClick={() => setShowConf(p => !p)}
@@ -4209,7 +4213,7 @@ function AuthScreen({ dark, onLogin }: AuthScreenProps) {
           {/* Forgot password link */}
           {view === 'login' && (
             <div className="flex justify-end -mt-2">
-              <button onClick={() => reset('forgot')} className="text-[13px] text-[#007AFF] font-medium hover:opacity-70 transition-opacity">
+              <button type="button" onClick={() => reset('forgot')} className="text-[13px] text-[#007AFF] font-medium hover:opacity-70 transition-opacity">
                 Quên mật khẩu?
               </button>
             </div>
@@ -4231,7 +4235,7 @@ function AuthScreen({ dark, onLogin }: AuthScreenProps) {
 
           {/* CTA button */}
           <button
-            onClick={view === 'login' ? handleLogin : view === 'register' ? handleRegister : handleForgot}
+            type="submit"
             disabled={loading}
             className="w-full py-3.5 rounded-2xl bg-[#007AFF] text-white font-semibold text-[15px] hover:bg-[#0066CC] active:scale-[0.98] transition-all disabled:opacity-60 flex items-center justify-center gap-2 mt-2"
           >
@@ -4241,7 +4245,7 @@ function AuthScreen({ dark, onLogin }: AuthScreenProps) {
             }
           </button>
 
-        </div>
+        </form>
 
         {/* Footer links */}
         <div className="mt-6 text-center text-[14px]">
