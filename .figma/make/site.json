@@ -1,0 +1,10 @@
+{
+  "description": "A PWA designed for iPhone and PC that enables efficient POS sales management, streamlining in-store transactions for retail businesses.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}
