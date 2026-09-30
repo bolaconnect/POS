@@ -5234,15 +5234,6 @@ export default function App() {
               )}
             </button>
 
-            {/* Chuyển đổi giao diện Sáng / Tối */}
-            <button
-              onClick={() => setDark(!dark)}
-              className="p-2.5 rounded-xl hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] transition-colors text-[#8E8E93]"
-              title={dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
-            >
-              {dark ? <SunIcon /> : <MoonIcon />}
-            </button>
-
             <button
               onClick={() => setShowSettings(true)}
               className="p-2.5 rounded-xl hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] transition-colors text-[#8E8E93]"
