@@ -4749,7 +4749,24 @@ export default function App() {
     }
   }, [])
 
-  const [dark, setDark] = useState(false)
+  const [dark, setDark] = useState<boolean>(() => {
+    try {
+      const saved = localStorage.getItem('quaypos_theme')
+      if (saved) return saved === 'dark'
+    } catch {}
+    return false // Mặc định giao diện sáng (Light mode)
+  })
+
+  useEffect(() => {
+    try {
+      localStorage.setItem('quaypos_theme', dark ? 'dark' : 'light')
+    } catch {}
+    if (dark) {
+      document.documentElement.classList.add('dark')
+    } else {
+      document.documentElement.classList.remove('dark')
+    }
+  }, [dark])
   const [category, setCategory] = useState('Tất cả')
   const [search, setSearch] = useState('')
   const [cart, setCart] = useState<CartLine[]>([])
@@ -5215,6 +5232,15 @@ export default function App() {
               {orders.length > 0 && (
                 <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#007AFF]" />
               )}
+            </button>
+
+            {/* Chuyển đổi giao diện Sáng / Tối */}
+            <button
+              onClick={() => setDark(!dark)}
+              className="p-2.5 rounded-xl hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] transition-colors text-[#8E8E93]"
+              title={dark ? 'Chuyển sang giao diện sáng' : 'Chuyển sang giao diện tối'}
+            >
+              {dark ? <SunIcon /> : <MoonIcon />}
             </button>
 
             <button
