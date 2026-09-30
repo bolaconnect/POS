@@ -33,3 +33,9 @@ This is the canonical project structure. Start with task-relevant files below. O
 This project uses **Tailwind CSS v4** through the `@tailwindcss/vite` plugin configured in `vite.config.ts`. `src/index.css` imports Tailwind with `@import 'tailwindcss';`. Use Tailwind utility classes directly in JSX and put global CSS or Tailwind v4 theme customization in `src/index.css`. This scaffold does not need a Tailwind config file or PostCSS config.
 
 `src/main.tsx` imports `src/index.css`, so global font wiring belongs in `src/index.css`. Keep CSS `@import` statements first, then add any `@font-face` rules and font-family defaults there.
+
+## Autonomous Execution Rules (All Models)
+
+- **Terminal & Command Execution**: TẤT CẢ các model AI (Gemini, Claude, v.v.) được phép và PHẢI tự động chạy mọi lệnh terminal cần thiết (kiểm tra code, chạy type-check `tsc`, build, test, git commit, git push, cài đặt thư viện...) một cách chủ động mà KHÔNG CẦN hỏi lại hoặc xin phép người dùng.
+- **Git Workflow**: Tự động kiểm tra chất lượng code, commit với thông điệp rõ ràng và đẩy (`git push`) trực tiếp khi hoàn thành task.
+- **Proactive Resolution**: Khi gặp lỗi hoặc cần xác minh, tự động chạy lệnh điều tra, sửa lỗi và kiểm thử lại cho đến khi thành công.
