@@ -59,6 +59,7 @@ export interface Order {
   cashGiven: number
   change: number
   time: Date
+  customerId?: number
 }
 
 export interface Customer {

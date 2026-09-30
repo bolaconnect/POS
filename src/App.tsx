@@ -68,6 +68,7 @@ interface Order {
   cashGiven: number
   change: number
   time: Date
+  customerId?: number
 }
 
 interface Customer {
@@ -304,11 +305,13 @@ const SAMPLE_STOCK_RECEIPTS: StockInReceipt[] = [
 
 // ── Helpers ───────────────────────────────────────────────────────────────────
 
-const fmt = (n: number) =>
-  new Intl.NumberFormat('vi-VN', { style: 'currency', currency: 'VND' }).format(n)
+// Phân cách hàng nghìn bằng dấu . (cố định, không phụ thuộc locale hệ thống)
+const fmtNum = (n: number) =>
+  Math.round(n).toString().replace(/\B(?=(\d{3})+(?!\d))/g, '.')
 
-const shortFmt = (n: number) =>
-  new Intl.NumberFormat('vi-VN').format(n) + '₫'
+const fmt = (n: number) => fmtNum(n) + ' ₫'
+
+const shortFmt = (n: number) => fmtNum(n) + '₫'
 
 function roundUp(total: number, step: number) {
   return Math.ceil(total / step) * step
@@ -421,6 +424,216 @@ interface AdminPanelProps {
   syncDebtEntry?: (d: any) => Promise<any>
   syncBankAccounts?: (b: BankAccount[]) => Promise<any>
   syncSetting?: (k: string, v: string) => Promise<any>
+}
+
+// ── Order Detail Modal ────────────────────────────────────────────────────────
+
+interface OrderDetailModalProps {
+  order: Order | null
+  onClose: () => void
+  customers?: Customer[]
+  shopName?: string
+  onViewCustomer?: (customer: Customer) => void
+}
+
+function OrderDetailModal({ order, onClose, customers = [], shopName = 'QuầyPOS', onViewCustomer }: OrderDetailModalProps) {
+  if (!order) return null
+
+  const customer = order.customerId ? customers.find(c => c.id === order.customerId) : null
+  const orderDate = new Date(order.time)
+  const timeFormatted = orderDate.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })
+  const dateFormatted = orderDate.toLocaleDateString('vi-VN', { day: '2-digit', month: '2-digit', year: 'numeric' })
+
+  const handlePrint = () => {
+    window.print()
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 flex items-center justify-center p-3 sm:p-4 animate-fade-in">
+      <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={onClose} />
+
+      <div className="relative w-full max-w-md bg-white dark:bg-[#1C1C1E] rounded-3xl shadow-2xl flex flex-col max-h-[92vh] overflow-hidden animate-slide-up">
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-5 pt-4 pb-3.5 border-b border-black/[0.07] dark:border-white/[0.07] shrink-0 no-print">
+          <div className="flex items-center gap-2">
+            <div className="w-8 h-8 rounded-xl bg-[#007AFF]/10 text-[#007AFF] flex items-center justify-center text-base">
+              🧾
+            </div>
+            <div>
+              <h3 className="font-bold text-[16px] leading-tight">Chi tiết hóa đơn #{order.id}</h3>
+              <p className="text-[11px] text-[#8E8E93]">{dateFormatted} lúc {timeFormatted}</p>
+            </div>
+          </div>
+          <button
+            onClick={onClose}
+            className="w-8 h-8 rounded-full bg-[#E5E5EA] dark:bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:bg-[#D1D1D6] transition-colors"
+          >
+            <XIcon size="w-4 h-4" />
+          </button>
+        </div>
+
+        {/* Scrollable Receipt Body */}
+        <div className="flex-1 overflow-y-auto p-5 scrollbar-hide">
+          <div id="printable-order-receipt" className="space-y-4 text-[#1C1C1E] dark:text-white">
+            {/* Receipt Header */}
+            <div className="text-center pb-3 border-b border-dashed border-black/15 dark:border-white/15">
+              <p className="text-[17px] font-black tracking-tight uppercase">{shopName}</p>
+              <p className="text-[12px] font-bold text-[#8E8E93] tracking-widest uppercase mt-0.5">PHIẾU THANH TOÁN</p>
+              <p className="text-[14px] font-bold mt-1">Mã đơn: #{order.id}</p>
+              <p className="text-[11px] text-[#8E8E93] mt-0.5">{dateFormatted} • {timeFormatted}</p>
+            </div>
+
+            {/* Customer & Payment info */}
+            <div className="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-3.5 space-y-2 text-[13px]">
+              <div className="flex items-center justify-between">
+                <span className="text-[#8E8E93]">Khách hàng:</span>
+                {customer ? (
+                  <div className="flex items-center gap-1.5 font-semibold text-right">
+                    <span>{customer.name}</span>
+                    {onViewCustomer && (
+                      <button
+                        type="button"
+                        onClick={() => {
+                          onClose()
+                          onViewCustomer(customer)
+                        }}
+                        className="no-print text-[11px] text-[#007AFF] hover:underline bg-[#007AFF]/10 px-2 py-0.5 rounded-lg font-medium"
+                      >
+                        Hồ sơ
+                      </button>
+                    )}
+                  </div>
+                ) : (
+                  <span className="font-medium text-[#8E8E93]">Khách lẻ</span>
+                )}
+              </div>
+              {customer?.phone && (
+                <div className="flex items-center justify-between">
+                  <span className="text-[#8E8E93]">Số điện thoại:</span>
+                  <span className="font-medium tabular-nums">{customer.phone}</span>
+                </div>
+              )}
+              <div className="flex items-center justify-between pt-1 border-t border-black/[0.05] dark:border-white/[0.05]">
+                <span className="text-[#8E8E93]">Phương thức:</span>
+                <span className={`px-2.5 py-0.5 rounded-full text-[11px] font-bold ${
+                  order.method === 'cash'     ? 'bg-[#FFF3E0] dark:bg-[rgba(255,149,0,0.15)] text-[#FF9500]' :
+                  order.method === 'transfer' ? 'bg-[#E8F5E9] dark:bg-[rgba(52,199,89,0.15)] text-[#34C759]' :
+                                                'bg-[#F3E8FF] dark:bg-[rgba(175,82,222,0.15)] text-[#AF52DE]'
+                }`}>
+                  {order.method === 'cash' ? '💵 Tiền mặt' : order.method === 'transfer' ? '📱 Chuyển khoản' : '📒 Ghi nợ'}
+                </span>
+              </div>
+            </div>
+
+            {/* Items list */}
+            <div>
+              <p className="text-[11px] font-bold uppercase tracking-wider text-[#8E8E93] mb-2 px-1">
+                Danh sách mặt hàng ({order.lines.length})
+              </p>
+              <div className="divide-y divide-black/[0.06] dark:divide-white/[0.06] border-y border-black/[0.06] dark:border-white/[0.06]">
+                {order.lines.map((line, idx) => {
+                  const unitPrice = line.variant ? line.variant.price : line.product.price
+                  const lineTotal = unitPrice * line.qty
+                  return (
+                    <div key={idx} className="py-2.5 flex items-start justify-between gap-3">
+                      <div className="flex-1 min-w-0">
+                        <div className="flex items-center gap-1.5">
+                          <span className="text-base shrink-0">{line.product.emoji}</span>
+                          <span className="font-semibold text-[13px] truncate">{line.product.name}</span>
+                        </div>
+                        {line.variant && (
+                          <span className="text-[11px] text-[#007AFF] font-medium ml-6 block truncate">
+                            {line.variant.name}
+                          </span>
+                        )}
+                        <p className="text-[11px] text-[#8E8E93] ml-6 tabular-nums">
+                          {shortFmt(unitPrice)} × {line.qty} {line.product.unit || ''}
+                        </p>
+                      </div>
+                      <div className="text-right shrink-0">
+                        <span className="font-bold text-[13px] tabular-nums text-[#1C1C1E] dark:text-white">
+                          {shortFmt(lineTotal)}
+                        </span>
+                      </div>
+                    </div>
+                  )
+                })}
+              </div>
+            </div>
+
+            {/* Pricing breakdown */}
+            <div className="space-y-1.5 pt-2 text-[13px]">
+              <div className="flex justify-between text-[#8E8E93]">
+                <span>Tạm tính</span>
+                <span className="tabular-nums font-medium">{shortFmt(order.subtotal)}</span>
+              </div>
+              <div className="flex justify-between text-[#8E8E93]">
+                <span>Thuế VAT</span>
+                <span className="tabular-nums font-medium">{shortFmt(order.tax)}</span>
+              </div>
+              <div className="flex justify-between items-baseline pt-2 border-t border-black/10 dark:border-white/10 text-base font-bold">
+                <span>Tổng cộng</span>
+                <span className="text-xl font-extrabold text-[#007AFF] tabular-nums">{fmt(order.total)}</span>
+              </div>
+
+              {/* Cash payment detail */}
+              {order.method === 'cash' && (
+                <div className="bg-[#F2F2F7]/70 dark:bg-[#2C2C2E]/70 rounded-xl p-3 mt-2 space-y-1 text-[12px]">
+                  <div className="flex justify-between">
+                    <span className="text-[#8E8E93]">Khách đưa:</span>
+                    <span className="font-semibold tabular-nums">{fmt(order.cashGiven)}</span>
+                  </div>
+                  <div className="flex justify-between text-[#34C759]">
+                    <span className="font-semibold">Tiền thối lại:</span>
+                    <span className="font-bold tabular-nums text-[13px]">{fmt(order.change)}</span>
+                  </div>
+                </div>
+              )}
+
+              {/* Debt detail */}
+              {order.method === 'debt' && (
+                <div className="bg-[#FFF8E7] dark:bg-[rgba(255,149,0,0.08)] border border-[#FF9500]/20 rounded-xl p-3 mt-2 text-[12px] text-[#FF9500]">
+                  <p className="font-semibold">📒 Đã ghi vào sổ nợ khách hàng</p>
+                  <p className="text-[11px] opacity-80 mt-0.5">Số tiền nợ: {fmt(order.total)}</p>
+                </div>
+              )}
+
+              {/* Transfer detail */}
+              {order.method === 'transfer' && (
+                <div className="bg-[#E8F5E9] dark:bg-[rgba(52,199,89,0.08)] border border-[#34C759]/20 rounded-xl p-3 mt-2 text-[12px] text-[#34C759]">
+                  <p className="font-semibold">✓ Đã thanh toán chuyển khoản thành công</p>
+                </div>
+              )}
+            </div>
+
+            {/* Receipt Footer */}
+            <div className="text-center pt-3 border-t border-dashed border-black/15 dark:border-white/15 text-[11px] text-[#8E8E93]">
+              <p>Cảm ơn quý khách và hẹn gặp lại!</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Modal Actions */}
+        <div className="p-4 border-t border-black/[0.07] dark:border-white/[0.07] flex gap-2 shrink-0 no-print bg-[#F9F9F9] dark:bg-[#18181A]">
+          <button
+            type="button"
+            onClick={handlePrint}
+            className="flex-1 py-3 px-4 rounded-2xl bg-[#007AFF] text-white font-semibold text-[14px] hover:bg-[#0066CC] active:scale-[0.98] transition-all flex items-center justify-center gap-2 shadow-sm"
+          >
+            <span>🖨️</span>
+            <span>In hóa đơn</span>
+          </button>
+          <button
+            type="button"
+            onClick={onClose}
+            className="py-3 px-5 rounded-2xl bg-[#E5E5EA] dark:bg-[#2C2C2E] text-[#1C1C1E] dark:text-white font-semibold text-[14px] hover:bg-[#D1D1D6] active:scale-[0.98] transition-all"
+          >
+            Đóng
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, customers, setCustomers, debtEntries, setDebtEntries, suppliers = SAMPLE_SUPPLIERS, setSuppliers, bankAccounts, setBankAccounts, units = DEFAULT_UNITS, setUnits, stockReceipts = [], setStockReceipts, shopName, setShopName, vatRate, setVatRate, onClose, initialTab = 'overview', currentUser = '', onLogout, onChangePassword, onInstallPwa, syncProduct, syncDeleteProduct, syncSupplier, syncDeleteSupplier, syncCustomer, syncDeleteCustomer, syncStockReceipt, syncDebtEntry, syncBankAccounts, syncSetting }: AdminPanelProps) {
@@ -799,6 +1012,10 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
   const [isSavingCustDebt, setIsSavingCustDebt] = useState(false)
 
   const [orderFilter, setOrderFilter] = useState<'all' | 'cash' | 'transfer' | 'debt'>('all')
+  const [orderDateFilter, setOrderDateFilter] = useState<'today' | 'week' | 'month' | 'year' | 'all' | 'custom'>('all')
+  const [customDate, setCustomDate] = useState('')
+  const [selectedOrder, setSelectedOrder] = useState<Order | null>(null)
+  const [selectedCustomer, setSelectedCustomer] = useState<Customer | null>(null)
 
   // ── Bank account state ──
   const [showBankForm, setShowBankForm] = useState(false)
@@ -906,8 +1123,8 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
     setFormData({
       name: p.name,
       price: p.price.toString(),
-      costPrice: p.costPrice !== undefined ? p.costPrice.toString() : '',
-      stock: p.stock !== undefined ? p.stock.toString() : '0',
+      costPrice: p.costPrice != null ? p.costPrice.toString() : '',
+      stock: p.stock != null ? p.stock.toString() : '0',
       unit: currentUnit,
       category: p.category,
       emoji: p.emoji,
@@ -918,8 +1135,8 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
             id: v.id,
             name: v.name,
             price: v.price.toString(),
-            costPrice: v.costPrice !== undefined ? v.costPrice.toString() : '',
-            stock: v.stock !== undefined ? v.stock.toString() : '',
+            costPrice: v.costPrice != null ? v.costPrice.toString() : '',
+            stock: v.stock != null ? v.stock.toString() : '',
           }))
         : [],
     })
@@ -1003,8 +1220,15 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
 
   const handleImageFile = async (file: File) => {
     if (!file.type.startsWith('image/')) return
-    const localPreview = URL.createObjectURL(file)
-    setFormData(f => ({ ...f, image: localPreview }))
+    // Đọc base64 ngay để preview và làm fallback (hoạt động trên mọi máy)
+    const toBase64 = (f: File): Promise<string> => new Promise((res, rej) => {
+      const reader = new FileReader()
+      reader.onload = () => res(reader.result as string)
+      reader.onerror = rej
+      reader.readAsDataURL(f)
+    })
+    const base64 = await toBase64(file)
+    setFormData(f => ({ ...f, image: base64 }))
     try {
       const publicUrl = await uploadProductImage(file)
       if (publicUrl) {
@@ -1021,7 +1245,36 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
     syncDeleteProduct?.(id)
   }
 
-  const filteredOrders = orderFilter === 'all' ? orders : orders.filter(o => o.method === orderFilter)
+  const filteredOrders = useMemo(() => {
+    const now = new Date()
+    const startOf = (unit: 'day' | 'week' | 'month' | 'year') => {
+      const d = new Date(now)
+      if (unit === 'day')   { d.setHours(0,0,0,0) }
+      if (unit === 'week')  {
+        const day = d.getDay()
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+        d.setDate(diff)
+        d.setHours(0,0,0,0)
+      }
+      if (unit === 'month') { d.setDate(1); d.setHours(0,0,0,0) }
+      if (unit === 'year')  { d.setMonth(0,1); d.setHours(0,0,0,0) }
+      return d
+    }
+    return orders.filter(o => {
+      const t = new Date(o.time)
+      if (customDate) {
+        const orderDateStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+        if (orderDateStr !== customDate) return false
+      } else {
+        if (orderDateFilter === 'today' && t < startOf('day'))  return false
+        if (orderDateFilter === 'week'  && t < startOf('week')) return false
+        if (orderDateFilter === 'month' && t < startOf('month'))return false
+        if (orderDateFilter === 'year'  && t < startOf('year')) return false
+      }
+      if (orderFilter !== 'all' && o.method !== orderFilter)  return false
+      return true
+    })
+  }, [orders, orderFilter, orderDateFilter, customDate])
 
   // Customer helpers
   const custBalances = useMemo(() => {
@@ -1941,9 +2194,9 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
             const bal = custBalances.get(selectedCust.id) ?? 0
             const custDebts = [...debtEntries].filter(e => e.customerId === selectedCust.id).sort((a, b) => b.time.getTime() - a.time.getTime())
             const custOrders = orders.filter(o => {
-              const linked = debtEntries.find(e => e.orderId === o.id && e.customerId === selectedCust.id)
-              return !!linked
-            })
+              if (o.customerId === selectedCust.id) return true
+              return debtEntries.some(e => e.orderId === o.id && e.customerId === selectedCust.id)
+            }).sort((a, b) => new Date(b.time).getTime() - new Date(a.time).getTime())
             const totalSpent = custDebts.filter(e => e.type === 'debit').reduce((s, e) => s + e.amount, 0)
             const totalPaid  = custDebts.filter(e => e.type === 'credit').reduce((s, e) => s + e.amount, 0)
             const formatTime = (d: Date) => {
@@ -2014,17 +2267,30 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
                   </div>
                 </div>
 
-                {/* Linked orders */}
+                {/* Customer orders */}
                 {custOrders.length > 0 && (
                   <div className="px-4 mt-3 shrink-0">
-                    <p className="text-[11px] font-semibold text-[#8E8E93] uppercase tracking-wider mb-2">{custOrders.length} đơn hàng liên kết</p>
-                    <div className="flex gap-2 overflow-x-auto scrollbar-hide pb-1">
+                    <p className="text-[11px] font-semibold text-[#8E8E93] uppercase tracking-wider mb-2">
+                      {custOrders.length} đơn hàng • Tổng chi tiêu: <span className="text-[#007AFF]">{shortFmt(custOrders.reduce((s, o) => s + o.total, 0))}</span>
+                    </p>
+                    <div className="space-y-1.5">
                       {custOrders.map(o => (
-                        <div key={o.id} className="shrink-0 bg-white dark:bg-[#1C1C1E] rounded-xl px-3 py-2.5 ring-1 ring-black/[0.05] dark:ring-white/[0.05] min-w-[140px]">
-                          <p className="text-[12px] font-bold">#{o.id}</p>
-                          <p className="text-[13px] font-semibold text-[#007AFF] tabular-nums mt-0.5">{shortFmt(o.total)}</p>
-                          <p className="text-[10px] text-[#8E8E93] mt-0.5">{o.time.toLocaleDateString('vi-VN')}</p>
-                        </div>
+                        <button key={o.id} onClick={() => setSelectedOrder(o)}
+                          className="w-full flex items-center gap-3 bg-white dark:bg-[#1C1C1E] rounded-xl px-3 py-2.5 ring-1 ring-black/[0.05] dark:ring-white/[0.05] text-left hover:ring-[#007AFF]/30 hover:shadow-sm transition-all active:scale-[0.99]">
+                          <div className={`w-8 h-8 rounded-full flex items-center justify-center text-[11px] font-bold shrink-0 ${
+                            o.method === 'cash' ? 'bg-[#FFF3E0] text-[#FF9500]' :
+                            o.method === 'transfer' ? 'bg-[#E8F5E9] text-[#34C759]' : 'bg-[#F3E8FF] text-[#AF52DE]'
+                          }`}>{o.method === 'cash' ? 'TM' : o.method === 'transfer' ? 'CK' : 'Nợ'}</div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[12px] font-bold">#{o.id}</p>
+                            <p className="text-[11px] text-[#8E8E93] truncate">{o.lines.map(l => `${l.product.emoji} ${l.product.name}`).join(' • ')}</p>
+                          </div>
+                          <div className="text-right shrink-0">
+                            <p className="text-[13px] font-bold text-[#007AFF] tabular-nums">{shortFmt(o.total)}</p>
+                            <p className="text-[10px] text-[#8E8E93]">{new Date(o.time).toLocaleDateString('vi-VN')}</p>
+                          </div>
+                          <svg className="w-3.5 h-3.5 text-[#C7C7CC] shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2.5}><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7"/></svg>
+                        </button>
                       ))}
                     </div>
                   </div>
@@ -2066,28 +2332,59 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
 
           {/* ── Đơn hàng ── */}
           {tab === 'orders' && (
-            <div className="p-4 max-w-3xl mx-auto">
-              {/* Filter */}
-              <div className="flex gap-2 mb-4 overflow-x-auto scrollbar-hide">
+            <div className="p-4 max-w-3xl mx-auto space-y-3">
+              {/* Date filter */}
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5 items-center">
+                {([
+                  { id: 'today', label: 'Hôm nay' },
+                  { id: 'week',  label: 'Tuần này' },
+                  { id: 'month', label: 'Tháng này' },
+                  { id: 'year',  label: 'Năm này' },
+                  { id: 'all',   label: 'Tất cả' },
+                ] as { id: typeof orderDateFilter; label: string }[]).map(f => (
+                  <button key={f.id} onClick={() => { setOrderDateFilter(f.id); setCustomDate('') }}
+                    className={`px-3.5 py-1.5 rounded-full text-[12px] font-semibold whitespace-nowrap transition-all ${orderDateFilter === f.id && !customDate ? 'bg-[#007AFF] text-white' : 'bg-white dark:bg-[#1C1C1E] text-[#3C3C43] dark:text-[rgba(235,235,245,0.6)] hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E]'}`}>
+                    {f.label}
+                  </button>
+                ))}
+                <div className="flex items-center gap-1.5 bg-white dark:bg-[#1C1C1E] px-3 py-1 rounded-full text-[12px] ring-1 ring-black/[0.06] dark:ring-white/[0.06] shrink-0">
+                  <span className="text-xs text-[#8E8E93]">📅</span>
+                  <input
+                    type="date"
+                    value={customDate}
+                    onChange={e => {
+                      setCustomDate(e.target.value)
+                      if (e.target.value) setOrderDateFilter('custom')
+                    }}
+                    className="bg-transparent text-[#1C1C1E] dark:text-white text-[12px] font-medium outline-none cursor-pointer"
+                    title="Chọn ngày cụ thể"
+                  />
+                  {customDate && (
+                    <button
+                      type="button"
+                      onClick={() => { setCustomDate(''); setOrderDateFilter('all') }}
+                      className="text-[#8E8E93] hover:text-[#FF3B30] text-[11px] ml-0.5"
+                      title="Bỏ chọn ngày"
+                    >
+                      ✕
+                    </button>
+                  )}
+                </div>
+              </div>
+              {/* Method filter */}
+              <div className="flex gap-1.5 overflow-x-auto scrollbar-hide pb-0.5 items-center">
                 {([
                   { id: 'all',      label: 'Tất cả' },
                   { id: 'cash',     label: '💵 Tiền mặt' },
                   { id: 'transfer', label: '📱 Chuyển khoản' },
                   { id: 'debt',     label: '📒 Ghi nợ' },
                 ] as { id: typeof orderFilter; label: string }[]).map(f => (
-                  <button
-                    key={f.id}
-                    onClick={() => setOrderFilter(f.id)}
-                    className={`px-4 py-1.5 rounded-full text-[13px] font-medium whitespace-nowrap transition-all ${
-                      orderFilter === f.id
-                        ? 'bg-[#007AFF] text-white'
-                        : 'bg-white dark:bg-[#1C1C1E] text-[#3C3C43] dark:text-[rgba(235,235,245,0.6)] hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E]'
-                    }`}
-                  >
+                  <button key={f.id} onClick={() => setOrderFilter(f.id)}
+                    className={`px-3.5 py-1.5 rounded-full text-[12px] font-medium whitespace-nowrap transition-all ${orderFilter === f.id ? 'bg-[#34C759] text-white' : 'bg-white dark:bg-[#1C1C1E] text-[#3C3C43] dark:text-[rgba(235,235,245,0.6)] hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E]'}`}>
                     {f.label}
                   </button>
                 ))}
-                <span className="ml-auto shrink-0 self-center text-[12px] text-[#8E8E93] tabular-nums">
+                <span className="ml-auto shrink-0 text-[12px] text-[#8E8E93] tabular-nums font-medium">
                   {filteredOrders.length} đơn • {shortFmt(filteredOrders.reduce((s, o) => s + o.total, 0))}
                 </span>
               </div>
@@ -2099,45 +2396,36 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
                 </div>
               ) : (
                 <div className="space-y-2">
-                  {filteredOrders.map(order => (
-                    <div key={order.id} className="bg-white dark:bg-[#1C1C1E] rounded-2xl p-4 ring-1 ring-black/[0.05] dark:ring-white/[0.05]">
-                      <div className="flex items-start justify-between mb-2">
-                        <div className="flex items-center gap-2 flex-wrap">
-                          <span className="font-bold text-[15px]">#{order.id}</span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                            order.method === 'cash'     ? 'bg-[#FFF3E0] dark:bg-[rgba(255,149,0,0.1)] text-[#FF9500]'  :
-                            order.method === 'transfer' ? 'bg-[#E8F5E9] dark:bg-[rgba(52,199,89,0.1)] text-[#34C759]'  :
-                                                          'bg-[#F3E8FF] dark:bg-[rgba(175,82,222,0.1)] text-[#AF52DE]'
-                          }`}>
-                            {order.method === 'cash' ? 'Tiền mặt' : order.method === 'transfer' ? 'Chuyển khoản' : 'Ghi nợ'}
-                          </span>
-                          <span className="text-[11px] text-[#8E8E93]">
-                            {order.time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
-                          </span>
+                  {filteredOrders.map(order => {
+                    const cust = order.customerId ? customers.find(c => c.id === order.customerId) : null
+                    return (
+                      <button key={order.id} onClick={() => setSelectedOrder(order)}
+                        className="w-full bg-white dark:bg-[#1C1C1E] rounded-2xl p-4 ring-1 ring-black/[0.05] dark:ring-white/[0.05] text-left hover:ring-[#007AFF]/40 hover:shadow-md transition-all active:scale-[0.99]">
+                        <div className="flex items-start justify-between mb-2">
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="font-bold text-[15px]">#{order.id}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                              order.method === 'cash'     ? 'bg-[#FFF3E0] dark:bg-[rgba(255,149,0,0.1)] text-[#FF9500]'  :
+                              order.method === 'transfer' ? 'bg-[#E8F5E9] dark:bg-[rgba(52,199,89,0.1)] text-[#34C759]'  :
+                                                            'bg-[#F3E8FF] dark:bg-[rgba(175,82,222,0.1)] text-[#AF52DE]'
+                            }`}>
+                              {order.method === 'cash' ? 'Tiền mặt' : order.method === 'transfer' ? 'Chuyển khoản' : 'Ghi nợ'}
+                            </span>
+                            <span className="text-[11px] text-[#8E8E93]">
+                              {new Date(order.time).toLocaleString('vi-VN', { hour: '2-digit', minute: '2-digit', day: '2-digit', month: '2-digit' })}
+                            </span>
+                          </div>
+                          <span className="font-bold text-[15px] tabular-nums text-[#007AFF]">{shortFmt(order.total)}</span>
                         </div>
-                        <span className="font-bold text-[15px] tabular-nums text-[#007AFF]">{shortFmt(order.total)}</span>
-                      </div>
-                      <div className="space-y-1">
-                        {order.lines.map((l, lIdx) => {
-                          const itemPrice = l.variant ? l.variant.price : l.product.price
-                          return (
-                            <div key={lIdx} className="flex justify-between text-[12px] text-[#8E8E93]">
-                              <span>
-                                {l.product.emoji} {l.product.name}
-                                {l.variant && <span className="text-[#007AFF] font-medium"> ({l.variant.name})</span>}
-                                {' '}× {l.qty} {l.product.unit || ''}
-                              </span>
-                              <span className="tabular-nums">{shortFmt(itemPrice * l.qty)}</span>
-                            </div>
-                          )
-                        })}
-                      </div>
-                      <div className="mt-2 pt-2 border-t border-black/[0.05] dark:border-white/[0.05] flex justify-between text-[11px] text-[#C7C7CC] dark:text-[#636366]">
-                        <span>Tạm tính {shortFmt(order.subtotal)} + VAT {shortFmt(order.tax)}</span>
-                        {order.method === 'cash' && order.change > 0 && <span>Thối: {shortFmt(order.change)}</span>}
-                      </div>
-                    </div>
-                  ))}
+                        <p className="text-[12px] text-[#8E8E93] truncate">
+                          {order.lines.map(l => `${l.product.emoji} ${l.product.name}${l.variant ? ` (${l.variant.name})` : ''} ×${l.qty}`).join('  •  ')}
+                        </p>
+                        {cust && (
+                          <p className="text-[11px] text-[#007AFF] mt-1 font-medium">👤 {cust.name}</p>
+                        )}
+                      </button>
+                    )
+                  })}
                 </div>
               )}
             </div>
@@ -2183,6 +2471,7 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
                       onChange={e => {
                         const v = Math.min(100, Math.max(0, parseInt(e.target.value) || 0))
                         setVatRate(v)
+                        syncSetting?.('vat_rate', v.toString())
                       }}
                       className="w-16 px-2.5 py-1.5 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[15px] font-bold text-[#007AFF] tabular-nums text-center outline-none focus:ring-2 focus:ring-[#007AFF]/25"
                     />
@@ -2492,8 +2781,8 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
                 )}
               </div>
 
-              {/* Emoji picker */}
-              <div>
+              {/* Emoji picker — chỉ hiển thị khi chưa có ảnh */}
+              {!formData.image && <div>
                 <label className="text-[12px] text-[#8E8E93] font-medium block mb-2">
                   Biểu tượng <span className="text-[#C7C7CC]">(hiển thị khi chưa có ảnh)</span>
                 </label>
@@ -2511,7 +2800,7 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
                     ))}
                   </div>
                 </div>
-              </div>
+              </div>}
 
               {/* Name */}
               <div>
@@ -4037,6 +4326,22 @@ function AdminPanel({ dark, setDark, orders, setOrders, products, setProducts, c
           </div>
         </div>
       )}
+
+      {/* ── Order Detail Modal ── */}
+      {selectedOrder && (
+        <OrderDetailModal
+          order={selectedOrder}
+          onClose={() => setSelectedOrder(null)}
+          customers={customers}
+          shopName={shopName}
+          onViewCustomer={(cust) => {
+            setSelectedCust(cust)
+            setCustView('detail')
+            setTab('customers')
+            setSelectedOrder(null)
+          }}
+        />
+      )}
     </div>
   )
 }
@@ -4494,6 +4799,10 @@ export default function App() {
   const [cashInput, setCashInput] = useState('')
   const [orders, setOrders] = useState<Order[]>([])
   const [showHistory, setShowHistory] = useState(false)
+  const [historyDateFilter, setHistoryDateFilter] = useState<'today' | 'week' | 'month' | 'year' | 'all' | 'custom'>('today')
+  const [historyCustomDate, setHistoryCustomDate] = useState('')
+  const [historyMethodFilter, setHistoryMethodFilter] = useState<'all' | 'cash' | 'transfer' | 'debt'>('all')
+  const [historySelectedOrder, setHistorySelectedOrder] = useState<Order | null>(null)
   const [showMobileCart, setShowMobileCart] = useState(false)
   const [success, setSuccess] = useState<Order | null>(null)
   const [orderNum, setOrderNum] = useState(1001)
@@ -4558,12 +4867,86 @@ export default function App() {
     return p
   }, [products, category, search])
 
+  const filteredHistoryOrders = useMemo(() => {
+    const now = new Date()
+    const startOf = (unit: 'day' | 'week' | 'month' | 'year') => {
+      const d = new Date(now)
+      if (unit === 'day')   { d.setHours(0,0,0,0) }
+      if (unit === 'week')  {
+        const day = d.getDay()
+        const diff = d.getDate() - day + (day === 0 ? -6 : 1)
+        d.setDate(diff)
+        d.setHours(0,0,0,0)
+      }
+      if (unit === 'month') { d.setDate(1); d.setHours(0,0,0,0) }
+      if (unit === 'year')  { d.setMonth(0,1); d.setHours(0,0,0,0) }
+      return d
+    }
+    return orders.filter(o => {
+      const t = new Date(o.time)
+      if (historyCustomDate) {
+        const orderDateStr = `${t.getFullYear()}-${String(t.getMonth() + 1).padStart(2, '0')}-${String(t.getDate()).padStart(2, '0')}`
+        if (orderDateStr !== historyCustomDate) return false
+      } else {
+        if (historyDateFilter === 'today' && t < startOf('day'))   return false
+        if (historyDateFilter === 'week'  && t < startOf('week'))  return false
+        if (historyDateFilter === 'month' && t < startOf('month')) return false
+        if (historyDateFilter === 'year'  && t < startOf('year'))  return false
+      }
+      if (historyMethodFilter !== 'all' && o.method !== historyMethodFilter) return false
+      return true
+    })
+  }, [orders, historyDateFilter, historyCustomDate, historyMethodFilter])
+
+  const historyRevenue = useMemo(() => {
+    return filteredHistoryOrders.reduce((s, o) => s + o.total, 0)
+  }, [filteredHistoryOrders])
+
   const [variantModalProduct, setVariantModalProduct] = useState<Product | null>(null)
+  // ── Chọn khách hàng (dùng chung mọi phương thức) ──
+  const [payCustomerId, setPayCustomerId] = useState<number | null>(null)
+  const [payCustomerSearch, setPayCustomerSearch] = useState('')
+  // ── Qty Numpad ──
+  const [qtyNumpadTarget, setQtyNumpadTarget] = useState<{ id: number; variantId: string | undefined } | null>(null)
+  const [qtyNumpadInput, setQtyNumpadInput] = useState('1')
+
+  const openQtyNumpad = (line: CartLine) => {
+    setQtyNumpadTarget({ id: line.product.id, variantId: line.variant?.id })
+    setQtyNumpadInput('0')
+  }
+  const closeQtyNumpad = () => setQtyNumpadTarget(null)
+  const confirmQtyNumpad = () => {
+    if (!qtyNumpadTarget) return
+    const val = parseFloat(qtyNumpadInput) || 0
+    if (val <= 0) {
+      setCart(c => c.filter(l => !(l.product.id === qtyNumpadTarget.id && l.variant?.id === qtyNumpadTarget.variantId)))
+    } else {
+      setCart(c => c.map(l =>
+        l.product.id === qtyNumpadTarget.id && l.variant?.id === qtyNumpadTarget.variantId
+          ? { ...l, qty: val }
+          : l
+      ))
+    }
+    closeQtyNumpad()
+  }
+  const handleQtyNumpad = (key: string) => {
+    if (key === '⌫') {
+      setQtyNumpadInput(p => p.length > 1 ? p.slice(0, -1) : '0')
+    } else if (key === '.') {
+      setQtyNumpadInput(p => p.includes('.') ? p : p + '.')
+    } else {
+      setQtyNumpadInput(p => {
+        const raw = p === '0' ? key : p + key
+        if (raw.includes('.')) return raw
+        return parseFloat(raw).toString()
+      })
+    }
+  }
 
   const subtotal = cart.reduce((s, l) => s + (l.variant?.price ?? l.product.price) * l.qty, 0)
   const tax      = Math.round(subtotal * vatRate / 100)
   const total    = subtotal + tax
-  const cashNum  = parseInt(cashInput || '0')
+  const cashNum  = parseFloat(cashInput || '0') || 0
   const change   = payMethod === 'cash' ? cashNum - total : 0
 
   const addToCart = useCallback((product: Product, variant?: ProductVariant) => {
@@ -4596,10 +4979,18 @@ export default function App() {
   const handleNumpad = (key: string) => {
     if (key === '⌫') {
       setCashInput(p => p.slice(0, -1))
+    } else if (key === '.') {
+      // Chỉ cho phép một dấu chấm
+      setCashInput(p => p.includes('.') ? p : (p || '0') + '.')
     } else {
       setCashInput(p => {
         const raw = p + key
-        const num = parseInt(raw)
+        // Nếu đang nhập phần thập phân, giữ nguyên string (không parse lại để tránh mất trailing zeros)
+        if (raw.includes('.')) {
+          const num = parseFloat(raw)
+          return isNaN(num) ? p : raw
+        }
+        const num = parseFloat(raw)
         return isNaN(num) ? p : num.toString()
       })
     }
@@ -4620,6 +5011,7 @@ export default function App() {
       cashGiven: payMethod === 'cash' ? cashNum : total,
       change:    payMethod === 'cash' ? cashNum - total : 0,
       time: new Date(),
+      customerId: payMethod === 'debt' ? debtCustomerId ?? undefined : payCustomerId ?? undefined,
     }
     setOrders(prev => [order, ...prev])
     setOrderNum(n => n + 1)
@@ -4686,12 +5078,16 @@ export default function App() {
     setPayMethod('cash')
     setDebtCustomerId(null)
     setDebtCustomerSearch('')
+    setPayCustomerId(null)
+    setPayCustomerSearch('')
     setTimeout(() => setSuccess(null), 3500)
   }
 
   const closePayment = () => {
     setShowPay(false)
     setCashInput('')
+    setPayCustomerId(null)
+    setPayCustomerSearch('')
   }
 
   // Quick-preset amounts for cash
@@ -4809,6 +5205,18 @@ export default function App() {
 
           {/* Actions */}
           <div className="flex items-center gap-0.5 ml-auto shrink-0">
+            {/* Lịch sử đơn hàng */}
+            <button
+              onClick={() => setShowHistory(true)}
+              className="relative p-2.5 rounded-xl hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] transition-colors text-[#8E8E93]"
+              title="Lịch sử đơn hàng"
+            >
+              <HistoryIcon />
+              {orders.length > 0 && (
+                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-[#007AFF]" />
+              )}
+            </button>
+
             <button
               onClick={() => setShowSettings(true)}
               className="p-2.5 rounded-xl hover:bg-[#E5E5EA] dark:hover:bg-[#2C2C2E] transition-colors text-[#8E8E93]"
@@ -4985,7 +5393,10 @@ export default function App() {
                           >
                             −
                           </button>
-                          <span className="w-6 text-center text-[13px] font-semibold tabular-nums">{line.qty}</span>
+                          <button
+                            onClick={() => openQtyNumpad(line)}
+                            className="min-w-[2.5rem] px-2 py-1 text-center text-[14px] font-bold tabular-nums bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-xl hover:bg-[#E5E5EA] dark:hover:bg-[#3A3A3C] transition-colors active:scale-95"
+                          >{line.qty}</button>
                           <button
                             onClick={() => updateQty(line.product.id, line.variant?.id, 1)}
                             className="w-7 h-7 rounded-full bg-[#007AFF] flex items-center justify-center text-white text-lg font-light leading-none hover:bg-[#0066CC] transition-colors active:scale-90"
@@ -5089,7 +5500,10 @@ export default function App() {
                       </div>
                       <div className="flex items-center gap-2 shrink-0">
                         <button onClick={() => updateQty(line.product.id, line.variant?.id, -1)} className="w-8 h-8 rounded-full bg-[#F2F2F7] dark:bg-[#2C2C2E] flex items-center justify-center text-lg font-light active:scale-90 transition-transform">−</button>
-                        <span className="w-6 text-center text-[14px] font-semibold tabular-nums">{line.qty}</span>
+                        <button
+                          onClick={() => openQtyNumpad(line)}
+                          className="min-w-[2.5rem] px-2 py-1 text-center text-[14px] font-bold tabular-nums bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-xl hover:bg-[#E5E5EA] dark:hover:bg-[#3A3A3C] transition-colors active:scale-95"
+                        >{line.qty}</button>
                         <button onClick={() => updateQty(line.product.id, line.variant?.id, 1)} className="w-8 h-8 rounded-full bg-[#007AFF] flex items-center justify-center text-white text-lg font-light active:scale-90 transition-transform">+</button>
                       </div>
                     </div>
@@ -5262,6 +5676,68 @@ export default function App() {
                   ))}
                 </div>
 
+                {/* ── Chọn khách hàng (cash / transfer) ── */}
+                {payMethod !== 'debt' && (() => {
+                  const q = payCustomerSearch.trim()
+                  const filtered = customers.filter(c => !q ||
+                    c.name.toLowerCase().includes(q.toLowerCase()) || c.phone.includes(q))
+                  const selectedCust = customers.find(c => c.id === payCustomerId)
+                  return (
+                    <div className="space-y-2">
+                      {selectedCust ? (
+                        <div className="flex items-center gap-2.5 bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl px-3.5 py-2.5">
+                          <div className="w-8 h-8 rounded-full bg-[#007AFF]/15 flex items-center justify-center text-[13px] font-bold text-[#007AFF] shrink-0">
+                            {selectedCust.name.split(' ').pop()?.charAt(0)}
+                          </div>
+                          <div className="flex-1 min-w-0">
+                            <p className="text-[13px] font-semibold truncate">{selectedCust.name}</p>
+                            <p className="text-[11px] text-[#8E8E93]">{selectedCust.phone || 'Chưa có SĐT'}</p>
+                          </div>
+                          <button
+                            onClick={() => { setPayCustomerId(null); setPayCustomerSearch('') }}
+                            className="text-[#8E8E93] hover:text-[#FF3B30] transition-colors p-1"
+                          >✕</button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <svg className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-[#8E8E93] pointer-events-none" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth={2}>
+                            <path strokeLinecap="round" strokeLinejoin="round" d="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z" />
+                          </svg>
+                          <input
+                            type="text"
+                            placeholder="Chọn khách hàng (không bắt buộc)"
+                            value={payCustomerSearch}
+                            onChange={e => setPayCustomerSearch(e.target.value)}
+                            className="w-full pl-9 pr-4 py-2.5 rounded-xl bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[14px] outline-none focus:ring-2 focus:ring-[#007AFF]/30"
+                          />
+                          {q && (
+                            <div className="absolute top-full mt-1 left-0 right-0 bg-white dark:bg-[#2C2C2E] rounded-2xl shadow-lg ring-1 ring-black/[0.06] dark:ring-white/[0.06] max-h-40 overflow-y-auto scrollbar-hide z-10">
+                              {filtered.length === 0 && (
+                                <p className="px-4 py-3 text-[13px] text-[#8E8E93]">Không tìm thấy khách hàng</p>
+                              )}
+                              {filtered.map(c => (
+                                <button
+                                  key={c.id}
+                                  onClick={() => { setPayCustomerId(c.id); setPayCustomerSearch('') }}
+                                  className="w-full flex items-center gap-3 px-3.5 py-2.5 hover:bg-[#F2F2F7] dark:hover:bg-[#3A3A3C] text-left transition-colors first:rounded-t-2xl last:rounded-b-2xl"
+                                >
+                                  <div className="w-7 h-7 rounded-full bg-[#E5E5EA] dark:bg-[#3A3A3C] flex items-center justify-center text-[12px] font-bold shrink-0">
+                                    {c.name.split(' ').pop()?.charAt(0)}
+                                  </div>
+                                  <div className="flex-1 min-w-0">
+                                    <p className="text-[13px] font-semibold truncate">{c.name}</p>
+                                    {c.phone && <p className="text-[11px] text-[#8E8E93]">{c.phone}</p>}
+                                  </div>
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )
+                })()}
+
                 {/* ── Payment content with slide animation ── */}
                 <div
                   key={payMethod}
@@ -5275,7 +5751,11 @@ export default function App() {
                     <div className="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-4">
                       <p className="text-[11px] font-semibold text-[#8E8E93] uppercase tracking-wide mb-1">Khách đưa</p>
                       <p className="text-2xl font-bold tabular-nums">
-                        {cashNum > 0 ? fmt(cashNum) : <span className="text-[#C7C7CC]">0 ₫</span>}
+                        {cashNum > 0 || cashInput.includes('.')
+                          ? (cashInput.endsWith('.') || (cashInput.includes('.') && cashInput.endsWith('0'))
+                              ? <span>{cashInput} ₫</span>
+                              : fmt(cashNum))
+                          : <span className="text-[#C7C7CC]">0 ₫</span>}
                       </p>
                       {cashNum >= total && (
                         <div className="mt-2 flex items-center gap-1.5 text-[#34C759]">
@@ -5309,13 +5789,15 @@ export default function App() {
 
                     {/* Numpad */}
                     <div className="grid grid-cols-3 gap-2">
-                      {['7','8','9','4','5','6','1','2','3','⌫','0','000'].map(k => (
+                      {['7','8','9','4','5','6','1','2','3','⌫','0','.'].map(k => (
                         <button
                           key={k}
                           onClick={() => handleNumpad(k)}
                           className={`py-4 rounded-2xl text-lg font-semibold transition-all active:scale-95 select-none ${
                             k === '⌫'
                               ? 'bg-[#FFE5E5] dark:bg-[rgba(255,59,48,0.12)] text-[#FF3B30] hover:bg-[#FFCCCC] dark:hover:bg-[rgba(255,59,48,0.2)]'
+                              : k === '.'
+                              ? 'bg-[#E5F0FF] dark:bg-[rgba(0,122,255,0.12)] text-[#007AFF] hover:bg-[#CCE2FF] dark:hover:bg-[rgba(0,122,255,0.2)] font-bold text-xl'
                               : 'bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[#1C1C1E] dark:text-white hover:bg-[#E5E5EA] dark:hover:bg-[#3A3A3C]'
                           }`}
                         >
@@ -5329,25 +5811,19 @@ export default function App() {
                 {/* ── Transfer ── */}
                 {payMethod === 'transfer' && (() => {
                   const primaryBank = bankAccounts.find(a => a.isPrimary) ?? bankAccounts[0]
-                  const addInfo = encodeURIComponent(`${shopName} ${orderNum}`)
+                  const addInfo = encodeURIComponent(`THICHPHUONG ${orderNum}`)
                   return (
-                    <div className="flex flex-col items-center text-center gap-4">
+                    <div className="flex flex-col items-center gap-2">
                       {primaryBank ? (
                         <>
-                          <div className="bg-white dark:bg-[#F8F8F8] rounded-2xl p-2 shadow-sm">
+                          <div className="bg-white dark:bg-[#F8F8F8] rounded-2xl p-1.5 shadow-sm">
                             <img
                               key={`${primaryBank.id}-${total}`}
-                              src={`https://img.vietqr.io/image/${primaryBank.bankBin}-${primaryBank.accountNo}-compact2.png?amount=${total}&addInfo=${addInfo}&accountName=${encodeURIComponent(primaryBank.accountName)}`}
+                              src={`https://img.vietqr.io/image/${primaryBank.bankBin}-${primaryBank.accountNo}-qr_only.png?amount=${total}&addInfo=${addInfo}`}
                               alt="VietQR"
-                              className="w-56 h-auto object-contain rounded-xl"
+                              className="w-52 h-52 object-contain rounded-xl"
                               onError={e => { (e.target as HTMLImageElement).src = `https://img.vietqr.io/image/${primaryBank.bankBin}-${primaryBank.accountNo}-qr_only.png?amount=${total}` }}
                             />
-                          </div>
-                          <div>
-                            <p className="font-semibold text-[15px]">Quét mã VietQR để chuyển khoản</p>
-                            <p className="text-[13px] text-[#8E8E93] mt-1">{VN_BANKS.find(b => b.bin === primaryBank.bankBin)?.name} • {primaryBank.accountNo}</p>
-                            <p className="text-[12px] text-[#8E8E93] font-medium">{primaryBank.accountName}</p>
-                            <p className="text-2xl font-bold tabular-nums text-[#007AFF] mt-3">{fmt(total)}</p>
                           </div>
                           {bankAccounts.length > 1 && (
                             <div className="flex gap-2 flex-wrap justify-center">
@@ -5520,28 +5996,98 @@ export default function App() {
             <div className="relative ml-auto w-full max-w-sm bg-white dark:bg-[#1C1C1E] h-full flex flex-col shadow-2xl animate-slide-up">
 
               {/* Drawer Header */}
-              <div className="flex items-center justify-between px-5 pt-safe pb-4 border-b border-black/[0.07] dark:border-white/[0.07] shrink-0" style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}>
+              <div className="flex items-center justify-between px-5 pt-safe pb-3.5 border-b border-black/[0.07] dark:border-white/[0.07] shrink-0" style={{ paddingTop: 'max(env(safe-area-inset-top), 16px)' }}>
                 <div>
-                  <h2 className="text-[20px] font-bold">Đơn hôm nay</h2>
-                  <p className="text-[13px] text-[#8E8E93] mt-0.5">
-                    {orders.length} đơn • Doanh thu: <span className="tabular-nums font-semibold text-[#34C759]">{shortFmt(todayRevenue)}</span>
+                  <h2 className="text-[19px] font-bold">Lịch sử đơn hàng</h2>
+                  <p className="text-[12px] text-[#8E8E93] mt-0.5">
+                    {filteredHistoryOrders.length} đơn • Doanh thu: <span className="tabular-nums font-semibold text-[#34C759]">{shortFmt(historyRevenue)}</span>
                   </p>
                 </div>
-                <button onClick={() => setShowHistory(false)} className="w-9 h-9 rounded-full bg-[#E5E5EA] dark:bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:bg-[#D1D1D6] transition-colors">
+                <button onClick={() => setShowHistory(false)} className="w-8 h-8 rounded-full bg-[#E5E5EA] dark:bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93] hover:bg-[#D1D1D6] transition-colors">
                   <XIcon />
                 </button>
               </div>
 
-              {/* Stats Row */}
-              {orders.length > 0 && (
-                <div className="grid grid-cols-3 gap-2 px-5 py-3 shrink-0">
+              {/* Date & Method Filters */}
+              <div className="p-3 border-b border-black/[0.05] dark:border-white/[0.05] space-y-2 shrink-0 bg-[#F9F9FB] dark:bg-[#18181A]">
+                {/* Date Filter */}
+                <div className="flex gap-1 overflow-x-auto scrollbar-hide items-center">
                   {([
-                    { label: 'Tiền mặt', color: 'text-[#FF9500]', bg: 'bg-[#FFF3E0] dark:bg-[rgba(255,149,0,0.1)]',   count: orders.filter(o => o.method === 'cash').length },
-                    { label: 'CK',       color: 'text-[#34C759]', bg: 'bg-[#E8F5E9] dark:bg-[rgba(52,199,89,0.1)]',   count: orders.filter(o => o.method === 'transfer').length },
-                    { label: 'Ghi nợ',   color: 'text-[#AF52DE]', bg: 'bg-[#F3E8FF] dark:bg-[rgba(175,82,222,0.1)]',  count: orders.filter(o => o.method === 'debt').length },
+                    { id: 'today', label: 'Hôm nay' },
+                    { id: 'week',  label: 'Tuần này' },
+                    { id: 'month', label: 'Tháng này' },
+                    { id: 'year',  label: 'Năm này' },
+                    { id: 'all',   label: 'Tất cả' },
+                  ] as { id: typeof historyDateFilter; label: string }[]).map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => { setHistoryDateFilter(f.id); setHistoryCustomDate('') }}
+                      className={`px-3 py-1 rounded-full text-[11px] font-semibold whitespace-nowrap transition-all ${
+                        historyDateFilter === f.id && !historyCustomDate
+                          ? 'bg-[#007AFF] text-white shadow-xs'
+                          : 'bg-white dark:bg-[#2C2C2E] text-[#3C3C43] dark:text-[rgba(235,235,245,0.7)] hover:bg-[#E5E5EA]'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                  <div className="flex items-center gap-1 bg-white dark:bg-[#2C2C2E] px-2 py-0.5 rounded-full text-[11px] ring-1 ring-black/[0.06] dark:ring-white/[0.06] shrink-0">
+                    <span className="text-[10px] text-[#8E8E93]">📅</span>
+                    <input
+                      type="date"
+                      value={historyCustomDate}
+                      onChange={e => {
+                        setHistoryCustomDate(e.target.value)
+                        if (e.target.value) setHistoryDateFilter('custom')
+                      }}
+                      className="bg-transparent text-[#1C1C1E] dark:text-white text-[11px] outline-none cursor-pointer"
+                      title="Chọn ngày cụ thể"
+                    />
+                    {historyCustomDate && (
+                      <button
+                        type="button"
+                        onClick={() => { setHistoryCustomDate(''); setHistoryDateFilter('today') }}
+                        className="text-[#8E8E93] hover:text-[#FF3B30] text-[10px]"
+                      >
+                        ✕
+                      </button>
+                    )}
+                  </div>
+                </div>
+
+                {/* Method Filter */}
+                <div className="flex gap-1 overflow-x-auto scrollbar-hide">
+                  {([
+                    { id: 'all',      label: 'Tất cả' },
+                    { id: 'cash',     label: '💵 Tiền mặt' },
+                    { id: 'transfer', label: '📱 CK' },
+                    { id: 'debt',     label: '📒 Nợ' },
+                  ] as { id: typeof historyMethodFilter; label: string }[]).map(f => (
+                    <button
+                      key={f.id}
+                      onClick={() => setHistoryMethodFilter(f.id)}
+                      className={`px-2.5 py-0.5 rounded-full text-[11px] font-medium whitespace-nowrap transition-all ${
+                        historyMethodFilter === f.id
+                          ? 'bg-[#34C759] text-white'
+                          : 'bg-white dark:bg-[#2C2C2E] text-[#3C3C43] dark:text-[rgba(235,235,245,0.7)] hover:bg-[#E5E5EA]'
+                      }`}
+                    >
+                      {f.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+
+              {/* Stats Row */}
+              {filteredHistoryOrders.length > 0 && (
+                <div className="grid grid-cols-3 gap-2 px-4 py-2.5 shrink-0 border-b border-black/[0.05] dark:border-white/[0.05]">
+                  {([
+                    { label: 'Tiền mặt', color: 'text-[#FF9500]', bg: 'bg-[#FFF3E0] dark:bg-[rgba(255,149,0,0.1)]',   count: filteredHistoryOrders.filter(o => o.method === 'cash').length },
+                    { label: 'CK',       color: 'text-[#34C759]', bg: 'bg-[#E8F5E9] dark:bg-[rgba(52,199,89,0.1)]',   count: filteredHistoryOrders.filter(o => o.method === 'transfer').length },
+                    { label: 'Ghi nợ',   color: 'text-[#AF52DE]', bg: 'bg-[#F3E8FF] dark:bg-[rgba(175,82,222,0.1)]',  count: filteredHistoryOrders.filter(o => o.method === 'debt').length },
                   ]).map(s => (
-                    <div key={s.label} className={`${s.bg} rounded-xl py-2 px-3 text-center`}>
-                      <p className={`text-lg font-bold ${s.color}`}>{s.count}</p>
+                    <div key={s.label} className={`${s.bg} rounded-xl py-1.5 px-2 text-center`}>
+                      <p className={`text-[15px] font-bold ${s.color}`}>{s.count}</p>
                       <p className="text-[10px] text-[#8E8E93] font-medium">{s.label}</p>
                     </div>
                   ))}
@@ -5550,42 +6096,65 @@ export default function App() {
 
               {/* Order List */}
               <div className="flex-1 overflow-y-auto scrollbar-hide divide-y divide-black/[0.05] dark:divide-white/[0.05]">
-                {orders.length === 0 ? (
+                {filteredHistoryOrders.length === 0 ? (
                   <div className="flex flex-col items-center justify-center h-48 text-[#8E8E93]">
                     <span className="text-4xl mb-2">📋</span>
-                    <p className="text-sm">Chưa có đơn hàng nào</p>
+                    <p className="text-sm font-medium">Không tìm thấy đơn hàng nào</p>
+                    <p className="text-xs text-[#8E8E93] mt-0.5">Thử chọn khoảng thời gian khác</p>
                   </div>
                 ) : (
-                  orders.map(order => (
-                    <div key={order.id} className="px-5 py-3.5">
-                      <div className="flex items-center justify-between mb-1.5">
-                        <div className="flex items-center gap-2">
-                          <span className="text-[14px] font-bold">#{order.id}</span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
-                            order.method === 'cash'     ? 'bg-[#FFF3E0] dark:bg-[rgba(255,149,0,0.1)] text-[#FF9500]'  :
-                            order.method === 'transfer' ? 'bg-[#E8F5E9] dark:bg-[rgba(52,199,89,0.1)] text-[#34C759]'  :
-                                                          'bg-[#F3E8FF] dark:bg-[rgba(175,82,222,0.1)] text-[#AF52DE]'
-                          }`}>
-                            {order.method === 'cash' ? 'TM' : order.method === 'transfer' ? 'CK' : 'Nợ'}
-                          </span>
+                  filteredHistoryOrders.map(order => {
+                    const cust = order.customerId ? customers.find(c => c.id === order.customerId) : null
+                    return (
+                      <button
+                        key={order.id}
+                        type="button"
+                        onClick={() => setHistorySelectedOrder(order)}
+                        className="w-full px-5 py-3.5 text-left hover:bg-[#F2F2F7] dark:hover:bg-[#2C2C2E]/60 transition-colors block active:scale-[0.99]"
+                      >
+                        <div className="flex items-center justify-between mb-1">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <span className="text-[14px] font-bold">#{order.id}</span>
+                            <span className={`text-[10px] px-2 py-0.5 rounded-full font-semibold ${
+                              order.method === 'cash'     ? 'bg-[#FFF3E0] dark:bg-[rgba(255,149,0,0.1)] text-[#FF9500]'  :
+                              order.method === 'transfer' ? 'bg-[#E8F5E9] dark:bg-[rgba(52,199,89,0.1)] text-[#34C759]'  :
+                                                            'bg-[#F3E8FF] dark:bg-[rgba(175,82,222,0.1)] text-[#AF52DE]'
+                            }`}>
+                              {order.method === 'cash' ? 'TM' : order.method === 'transfer' ? 'CK' : 'Nợ'}
+                            </span>
+                          </div>
+                          <span className="text-[14px] font-bold tabular-nums text-[#007AFF]">{shortFmt(order.total)}</span>
                         </div>
-                        <span className="text-[14px] font-bold tabular-nums text-[#007AFF]">{shortFmt(order.total)}</span>
-                      </div>
-                      <p className="text-[12px] text-[#8E8E93] truncate">
-                        {order.lines.map(l => `${l.product.emoji} ${l.product.name}${l.variant ? ` (${l.variant.name})` : ''}${l.qty > 1 ? ` ×${l.qty}` : ''}`).join('  ')}
-                      </p>
-                      <p className="text-[11px] text-[#C7C7CC] dark:text-[#636366] mt-0.5">
-                        {order.time.toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit', second: '2-digit' })}
-                        {order.method === 'cash' && order.change > 0 && (
-                          <span className="ml-2 text-[#8E8E93]">thối {shortFmt(order.change)}</span>
-                        )}
-                      </p>
-                    </div>
-                  ))
+                        <p className="text-[12px] text-[#8E8E93] truncate">
+                          {order.lines.map(l => `${l.product.emoji} ${l.product.name}${l.variant ? ` (${l.variant.name})` : ''} ×${l.qty}`).join('  •  ')}
+                        </p>
+                        <div className="flex items-center justify-between mt-1 text-[11px] text-[#8E8E93]">
+                          <span>
+                            {new Date(order.time).toLocaleDateString('vi-VN')} {new Date(order.time).toLocaleTimeString('vi-VN', { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          {cust && (
+                            <span className="text-[#007AFF] font-medium truncate max-w-[120px]">
+                              👤 {cust.name}
+                            </span>
+                          )}
+                        </div>
+                      </button>
+                    )
+                  })
                 )}
               </div>
             </div>
           </div>
+        )}
+
+        {/* ── Order Detail Modal from History Drawer ── */}
+        {historySelectedOrder && (
+          <OrderDetailModal
+            order={historySelectedOrder}
+            onClose={() => setHistorySelectedOrder(null)}
+            customers={customers}
+            shopName={shopName}
+          />
         )}
 
         {/* ── Admin Panel ── */}
@@ -5697,6 +6266,76 @@ export default function App() {
             </div>
           </div>
         )}
+
+        {/* ── Qty Numpad Modal ── */}
+        {qtyNumpadTarget && (() => {
+          const targetLine = cart.find(l => l.product.id === qtyNumpadTarget.id && l.variant?.id === qtyNumpadTarget.variantId)
+          const linePrice = targetLine ? (targetLine.variant?.price ?? targetLine.product.price) : 0
+          const qtyVal = parseFloat(qtyNumpadInput) || 0
+          return (
+            <div className="fixed inset-0 z-50 flex items-end sm:items-center justify-center animate-fade-in">
+              <div className="absolute inset-0 bg-black/50 backdrop-blur-sm" onClick={closeQtyNumpad} />
+              <div className="relative w-full sm:max-w-[360px] bg-white dark:bg-[#1C1C1E] rounded-t-3xl sm:rounded-3xl shadow-2xl overflow-hidden animate-slide-up">
+                {/* Handle */}
+                <div className="flex justify-center pt-3 pb-1 sm:hidden">
+                  <div className="w-10 h-1 rounded-full bg-[#C7C7CC] dark:bg-[#48484A]" />
+                </div>
+                {/* Header */}
+                <div className="flex items-center justify-between px-5 pt-4 pb-3 border-b border-black/[0.07] dark:border-white/[0.07]">
+                  <div>
+                    <p className="text-[11px] font-semibold text-[#8E8E93] uppercase tracking-widest">Số lượng</p>
+                    <p className="text-[13px] font-medium truncate mt-0.5">{targetLine?.product.name}{targetLine?.variant ? ` · ${targetLine.variant.name}` : ''}</p>
+                  </div>
+                  <button onClick={closeQtyNumpad} className="w-8 h-8 rounded-full bg-[#E5E5EA] dark:bg-[#2C2C2E] flex items-center justify-center text-[#8E8E93]">✕</button>
+                </div>
+                {/* Display */}
+                <div className="px-5 pt-4 pb-2">
+                  <div className="bg-[#F2F2F7] dark:bg-[#2C2C2E] rounded-2xl p-4 flex items-center justify-between">
+                    <div>
+                      <p className="text-[11px] font-semibold text-[#8E8E93] uppercase tracking-wide mb-1">Nhập số lượng</p>
+                      <p className="text-3xl font-bold tabular-nums">
+                        {qtyNumpadInput || '0'}
+                        {targetLine?.product.unit && <span className="text-[16px] text-[#8E8E93] ml-1">{targetLine.product.unit}</span>}
+                      </p>
+                    </div>
+                    {qtyVal > 0 && (
+                      <div className="text-right">
+                        <p className="text-[11px] text-[#8E8E93]">Thành tiền</p>
+                        <p className="text-[16px] font-bold tabular-nums text-[#007AFF]">{shortFmt(linePrice * qtyVal)}</p>
+                      </div>
+                    )}
+                  </div>
+                </div>
+                {/* Numpad */}
+                <div className="px-5 pb-5 pt-2">
+                  <div className="grid grid-cols-3 gap-2">
+                    {['7','8','9','4','5','6','1','2','3','⌫','0','.'].map(k => (
+                      <button
+                        key={k}
+                        onClick={() => handleQtyNumpad(k)}
+                        className={`py-4 rounded-2xl text-lg font-semibold transition-all active:scale-95 select-none ${
+                          k === '⌫'
+                            ? 'bg-[#FFE5E5] dark:bg-[rgba(255,59,48,0.12)] text-[#FF3B30] hover:bg-[#FFCCCC]'
+                            : k === '.'
+                            ? 'bg-[#E5F0FF] dark:bg-[rgba(0,122,255,0.12)] text-[#007AFF] hover:bg-[#CCE2FF] font-bold text-xl'
+                            : 'bg-[#F2F2F7] dark:bg-[#2C2C2E] text-[#1C1C1E] dark:text-white hover:bg-[#E5E5EA] dark:hover:bg-[#3A3A3C]'
+                        }`}
+                      >
+                        {k}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    onClick={confirmQtyNumpad}
+                    className="w-full mt-3 py-4 rounded-2xl bg-[#007AFF] hover:bg-[#0066CC] text-white font-bold text-[15px] active:scale-[0.98] transition-all shadow-sm"
+                  >
+                    Xác nhận {qtyVal > 0 ? `· ${qtyVal}${targetLine?.product.unit ? ` ${targetLine.product.unit}` : ''}` : '(Xoá khỏi giỏ)'}
+                  </button>
+                </div>
+              </div>
+            </div>
+          )
+        })()}
 
       </div>
     </div>

@@ -7,8 +7,8 @@ import { supabase, isSupabaseConfigured } from '@/lib/supabase'
  */
 export async function uploadProductImage(file: File): Promise<string | null> {
   if (!isSupabaseConfigured) {
-    // Nếu chưa kết nối Supabase, fallback sang Object URL tạm thời trong phiên
-    return URL.createObjectURL(file)
+    // Không có Supabase → trả null, base64 từ caller sẽ được dùng
+    return null
   }
 
   try {
